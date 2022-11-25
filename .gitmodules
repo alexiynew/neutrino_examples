@@ -1,0 +1,3 @@
+[submodule "window_events/neutrino_framework"]
+	path = window_events/neutrino_framework
+	url = git@github.com:alexiynew/neutrino_framework.git
