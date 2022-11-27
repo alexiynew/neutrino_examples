@@ -16,7 +16,6 @@
 #include <log/stream_logger.hpp>
 #include <math/math.hpp>
 #include <system/window.hpp>
-#include <common/fps_counter.hpp>
 
 namespace N = neutrino;
 namespace NS = neutrino::system;
@@ -208,7 +207,7 @@ private:
 
 using ECSType = ECS<RenderComponent, SizeComponent, PositionComponent, MovementComponent>;
 
-constexpr std::size_t EntityesCount = 1;
+constexpr std::size_t EntityesCount = 1000000;
 
 class RenderSystem final : public ECSType::SystemType
 {
@@ -225,7 +224,7 @@ public:
             const auto &s = storage().component<SizeComponent>(index);
             const auto &p = storage().component<PositionComponent>(index);
 
-            const NM::Vector3f pos(p.pos.x, p.pos.y, 0.1);
+            const NM::Vector3f pos(p.pos.x, p.pos.y, -0.1);
             const NM::Matrix4f transform = scale(translate(NM::Matrix4f(), pos), {s.width, s.height, 1});
 
             m_renderer.render(m_mesh_id,
@@ -333,17 +332,20 @@ public:
     void run()
     {
         m_window.show();
+
+        m_frame_time = std::chrono::milliseconds(0);
+        m_last_frame_time = std::chrono::steady_clock::now();
+
         while (!m_window.should_close())
         {
             m_window.process_events();
 
             m_ecs.update();
-
             render_fps();
 
             m_renderer.display();
 
-            m_fps.tick();
+            tick();
         }
     }
 
@@ -354,15 +356,43 @@ public:
         m_renderer.set_viewport(size);
     }
 
+    void tick()
+    {
+        const auto now = std::chrono::steady_clock::now();
+        m_last_frame_duration = (now - m_last_frame_time);
+        m_frame_time += m_last_frame_duration;
+        m_last_frame_time = now;
+
+        while (m_frame_time > std::chrono::seconds(1))
+        {
+            m_frame_time -= std::chrono::seconds(1);
+            m_fps = m_current_fps;
+            m_current_fps = 0;
+        }
+
+        m_current_fps++;
+    }
+
     void render_fps()
     {
         constexpr NM::Vector3f FpsTextBottomRightOffset = {120, -50, 0};
         constexpr NM::Vector3f normal_text_scale = {15, 15, 1};
-
         const auto size = m_window.size();
-        NM::Vector3f text_pos = NM::Vector3f{size.width, 0, 0} - FpsTextBottomRightOffset;
 
-        m_renderer.load(m_text_id, m_font.create_text_mesh(std::to_string(m_fps.fps())));
+        // back
+        const NM::Vector3f pos = NM::Vector3f(size.width - 80, 55, 0);
+
+        m_renderer.render(m_mesh_id,
+                          m_shader_id,
+                          {NG::Uniform{"modelMatrix", scale(translate(NM::Matrix4f(), pos), {100, 20, 1})},
+                           NG::Uniform{"color", NG::Color(0x020202FFU)}});
+
+        // text
+        NM::Vector3f text_pos = NM::Vector3f{size.width, 0, 0.1} - FpsTextBottomRightOffset;
+
+        std::string text = std::to_string(m_fps) + " " + std::to_string(m_last_frame_duration.count());
+
+        m_renderer.load(m_text_id, m_font.create_text_mesh(text));
 
         const NM::Matrix4f transform = scale(translate(NM::Matrix4f(), text_pos), normal_text_scale);
         m_renderer.render(m_text_id,
@@ -381,7 +411,11 @@ private:
     NG::Renderer::ResourceId m_mesh_id = 1;
     NG::Renderer::ResourceId m_text_id = 2;
 
-    N::FpsCounter m_fps;
+    int m_fps = 0;
+    int m_current_fps = 0;
+    std::chrono::steady_clock::duration m_frame_time;
+    std::chrono::steady_clock::duration m_last_frame_duration;
+    std::chrono::steady_clock::time_point m_last_frame_time;
 
     NG::Font m_font;
 };
