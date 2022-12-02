@@ -1,4 +1,4 @@
-﻿#include "view.hpp"
+#include "view.hpp"
 
 #include <iomanip>
 #include <sstream>

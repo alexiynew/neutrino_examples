@@ -1,7 +1,8 @@
 #ifndef WINDOW_EVENTS_EVENT_HANDLER_HPP
 #define WINDOW_EVENTS_EVENT_HANDLER_HPP
 
-#include <common/fps_counter.hpp>
+#include <chrono>
+
 #include <system/window.hpp>
 
 #include "data_context.hpp"
@@ -37,6 +38,8 @@ public:
     void on_update();
 
 private:
+    using Clock = std::chrono::steady_clock;
+    
     // actions handlers
     void close_window();
     void toggle_fullscreen();
@@ -51,9 +54,13 @@ private:
     void toggle_cursor_visible();
 
     neutrino::system::Window& m_window;
-    neutrino::FpsCounter m_fps;
 
     DataContext m_data_context;
+    
+    int m_fps = 0;
+    int m_current_fps = 0;
+    Clock::duration m_frame_counter_duration;
+    Clock::time_point m_last_frame_time;
 };
 
 #endif

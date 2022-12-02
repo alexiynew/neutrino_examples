@@ -225,6 +225,7 @@ EventHandler::EventHandler(Window& w)
     : m_window(w)
 {
     m_data_context.set_window_state(m_window.state());
+    m_last_frame_time = Clock::now();
 }
 
 const DataContext& EventHandler::data_context() const
@@ -333,8 +334,6 @@ void EventHandler::on_character(const std::string& s)
 
 void EventHandler::on_update()
 {
-    m_fps.tick();
-
     m_data_context.set_window_state(m_window.state());
     m_data_context.set_window_resizable(m_window.is_resizable());
     m_data_context.set_window_has_input_focus(m_window.has_input_focus());
@@ -342,8 +341,17 @@ void EventHandler::on_update()
     m_data_context.set_cursor_captured(m_window.is_cursor_captured());
     m_data_context.set_cursor_visible(m_window.is_cursor_visible());
     m_data_context.set_cursor_hover(m_window.is_cursor_hover());
-
-    m_data_context.set_fps(m_fps.fps());
+    
+    m_current_fps++;
+    m_frame_counter_duration += (Clock::now() - m_last_frame_time);
+    while (m_frame_counter_duration > std::chrono::seconds(1)) {
+        m_frame_counter_duration -= std::chrono::seconds(1);
+        m_fps = m_current_fps;
+        m_current_fps = 0;
+    }
+    m_last_frame_time = Clock::now();
+    
+    m_data_context.set_fps(m_fps);
 }
 
 #pragma region actions handlers
