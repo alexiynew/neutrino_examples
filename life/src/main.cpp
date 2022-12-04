@@ -5,6 +5,7 @@
 #include <vector>
 #include <array>
 #include <variant>
+#include <filesystem>
 
 #include <common/utils.hpp>
 #include <graphics/color.hpp>
@@ -16,6 +17,7 @@
 #include <log/stream_logger.hpp>
 #include <math/math.hpp>
 #include <system/window.hpp>
+#include <profiler/profiler.hpp>
 
 namespace N = neutrino;
 namespace NS = neutrino::system;
@@ -23,42 +25,17 @@ namespace NG = neutrino::graphics;
 namespace NM = neutrino::math;
 namespace NL = neutrino::log;
 namespace NU = neutrino::utils;
+namespace NP = neutrino::profiler;
 
 namespace
 {
-    const std::string vertex_shader =
-        "#version 330 core\n\
-\n\
-layout(location = 0) in vec3 position;\n\
-\n\
-uniform mat4 modelMatrix;\n\
-uniform mat4 projectionMatrix;\n\
-uniform vec4 color;\n\
-\n\
-out vec4 fragColor;\n\
-\n\
-void main()\n\
-{\n\
-    gl_Position = projectionMatrix * modelMatrix * vec4(position, 1.0);\n\
-    fragColor = color;\n\
-}\n\
-";
-
-    const std::string fragment_shader =
-        "#version 330 core\n\
-\n\
-in vec4 fragColor;\n\
-\n\
-out vec4 color;\n\
-\n\
-void main()\n\
-{\n\
-    color = fragColor;\n\
-}\n\
-";
+    const std::filesystem::path fragment_shader = "data/fragment.frag";
+    const std::filesystem::path vertex_shader = "data/vertex.vert";
 
     const NG::Mesh::VertexData vertices = {{-0.5, -0.5, 0.0}, {0.5, -0.5, 0.0}, {0.5, 0.5, 0.0}, {-0.5, 0.5, 0.0}};
     NG::Mesh::IndicesData indices = {0, 1, 2, 0, 2, 3};
+
+    constexpr std::size_t EntityesCount = 10000;
 }
 
 struct RenderComponent
@@ -68,8 +45,7 @@ struct RenderComponent
 
 struct SizeComponent
 {
-    int width = 0;
-    int height = 0;
+    NM::Vector2i size;
 };
 
 struct PositionComponent
@@ -179,17 +155,29 @@ public:
     template <typename ComponentType>
     const ComponentType &component(std::size_t index) const
     {
-        using ContainerType = StorageContainer<ComponentType>;
-        static constexpr std::size_t container_index = component_index_v<StorageItemType, ContainerType>;
-        return std::get<ContainerType>(m_storage[container_index])[index];
+        return components_container<ComponentType>()[index];
     }
 
     template <typename ComponentType>
     ComponentType &component(std::size_t index)
     {
+        return components_container<ComponentType>()[index];
+    }
+
+    template <typename ComponentType>
+    StorageContainer<ComponentType> &components_container()
+    {
         using ContainerType = StorageContainer<ComponentType>;
         static constexpr std::size_t container_index = component_index_v<StorageItemType, ContainerType>;
-        return std::get<ContainerType>(m_storage[container_index])[index];
+        return std::get<ContainerType>(m_storage[container_index]);
+    }
+
+    template <typename ComponentType>
+    const StorageContainer<ComponentType> &components_container() const
+    {
+        using ContainerType = StorageContainer<ComponentType>;
+        static constexpr std::size_t container_index = component_index_v<StorageItemType, ContainerType>;
+        return std::get<ContainerType>(m_storage[container_index]);
     }
 
     void update()
@@ -207,8 +195,6 @@ private:
 
 using ECSType = ECS<RenderComponent, SizeComponent, PositionComponent, MovementComponent>;
 
-constexpr std::size_t EntityesCount = 1000000;
-
 class RenderSystem final : public ECSType::SystemType
 {
 public:
@@ -224,12 +210,11 @@ public:
             const auto &s = storage().component<SizeComponent>(index);
             const auto &p = storage().component<PositionComponent>(index);
 
-            const NM::Vector3f pos(p.pos.x, p.pos.y, -0.1);
-            const NM::Matrix4f transform = scale(translate(NM::Matrix4f(), pos), {s.width, s.height, 1});
-
             m_renderer.render(m_mesh_id,
                               m_shader_id,
-                              {NG::Uniform{"modelMatrix", transform}, NG::Uniform{"color", r.color}});
+                              {NG::Uniform{"pos", NM::Vector3f{p.pos, 0}},
+                               NG::Uniform{"size", NM::Vector3f{s.size, 1}},
+                               NG::Uniform{"color", r.color}});
         }
     }
 
@@ -255,12 +240,15 @@ public:
             auto &s = storage().component<SizeComponent>(index);
             auto &m = storage().component<MovementComponent>(index);
 
-            if (p.pos.x + s.width / 2 > m_size.width || p.pos.x - s.width / 2 < 0)
+            const auto &pos = p.pos;
+            const auto &size = s.size;
+
+            if (pos.x + size.x / 2 > m_size.width || pos.x - size.x / 2 < 0)
             {
                 m.offset.x *= -1;
             }
 
-            if (p.pos.y + s.height / 2 > m_size.height || p.pos.y - s.height / 2 < 0)
+            if (pos.y + size.y / 2 > m_size.height || pos.y - size.y / 2 < 0)
             {
                 m.offset.y *= -1;
             }
@@ -294,7 +282,7 @@ public:
             const auto offset = NU::random_numbers<int>(-10, 10, 2);
 
             RenderComponent r{.color{color[0], color[1], color[1], 1.0f}};
-            SizeComponent s{.width = size[0], .height = size[1]};
+            SizeComponent s{.size{size[0], size[1]}};
             PositionComponent p{.pos{pos[0], pos[1]}};
             MovementComponent m{.offset{offset[0], offset[1]}};
 
@@ -331,6 +319,7 @@ public:
 
     void run()
     {
+        NP::begin_profiling("Life");
         m_window.show();
 
         m_frame_time = std::chrono::milliseconds(0);
@@ -338,15 +327,24 @@ public:
 
         while (!m_window.should_close())
         {
+            auto s1 = NP::count_scope("loop");
             m_window.process_events();
 
-            m_ecs.update();
-            render_fps();
+            {
+                auto s2 = NP::count_scope("update");
+                m_ecs.update();
+                render_fps();
+            }
 
-            m_renderer.display();
+            {
+                auto s3 = NP::count_scope("display");
+                m_renderer.display();
+            }
 
             tick();
         }
+
+        NP::dump_to_file("Life.json");
     }
 
     void on_resize(N::Size size)
@@ -380,24 +378,23 @@ public:
         const auto size = m_window.size();
 
         // back
-        const NM::Vector3f pos = NM::Vector3f(size.width - 80, 55, 0);
-
         m_renderer.render(m_mesh_id,
                           m_shader_id,
-                          {NG::Uniform{"modelMatrix", scale(translate(NM::Matrix4f(), pos), {100, 20, 1})},
+                          {NG::Uniform{"pos", NM::Vector3f{size.width - 80, 55, 0.1}},
+                           NG::Uniform{"size", NM::Vector3f{100, 20, 1}},
                            NG::Uniform{"color", NG::Color(0x020202FFU)}});
 
         // text
-        NM::Vector3f text_pos = NM::Vector3f{size.width, 0, 0.1} - FpsTextBottomRightOffset;
+        NM::Vector3f text_pos = NM::Vector3f{size.width, 0, 0.15} - FpsTextBottomRightOffset;
 
         std::string text = std::to_string(m_fps) + " " + std::to_string(m_last_frame_duration.count());
 
         m_renderer.load(m_text_id, m_font.create_text_mesh(text));
-
-        const NM::Matrix4f transform = scale(translate(NM::Matrix4f(), text_pos), normal_text_scale);
         m_renderer.render(m_text_id,
                           m_shader_id,
-                          {NG::Uniform{"modelMatrix", transform}, NG::Uniform{"color", NM::Vector4f(0.9f, 0.5f, 0.6f, 1.0f)}});
+                          {NG::Uniform{"pos", text_pos},
+                           NG::Uniform{"size", normal_text_scale},
+                           NG::Uniform{"color", NM::Vector4f(0.9f, 0.5f, 0.6f, 1.0f)}});
     }
 
 private:

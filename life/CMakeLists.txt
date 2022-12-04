@@ -11,6 +11,8 @@ set(SOURCES
 )
 
 configure_file(${CMAKE_SOURCE_DIR}/data/UbuntuMono-Regular.ttf ${CMAKE_BINARY_DIR}/data/UbuntuMono-Regular.ttf COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/data/fragment.frag ${CMAKE_BINARY_DIR}/data/fragment.frag COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/data/vertex.vert ${CMAKE_BINARY_DIR}/data/vertex.vert COPYONLY)
 
 add_executable(${PROJECT_NAME} "")
 target_sources(${PROJECT_NAME} PRIVATE ${SOURCES})
