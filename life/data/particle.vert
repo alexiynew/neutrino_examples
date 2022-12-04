@@ -1,11 +1,12 @@
 #version 330 core
 
-layout(location = 0) in vec3 position;
+#define ARRAY_SIZE 100
 
-uniform vec3 size;
-uniform vec3 pos;
+layout(location = 0) in vec3 vertex;
 
-uniform vec4 color;
+uniform vec3 pos[ARRAY_SIZE];
+uniform vec3 size[ARRAY_SIZE];
+uniform vec4 color[ARRAY_SIZE];
 
 uniform mat4 projectionMatrix;
 
@@ -35,9 +36,9 @@ void main()
 {
     mat4 modelMatrix = mat4(1.0);
 
-    modelMatrix *= BuildTranslation(pos);
-    modelMatrix *= BuildScale(size);
+    modelMatrix *= BuildTranslation(pos[gl_InstanceID]);
+    modelMatrix *= BuildScale(size[gl_InstanceID]);
 
-    gl_Position = projectionMatrix * modelMatrix * vec4(position, 1.0);
-    fragColor = color;
+    gl_Position = projectionMatrix * modelMatrix * vec4(vertex, 1.0);
+    fragColor = color[gl_InstanceID];
 }

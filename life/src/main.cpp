@@ -37,6 +37,7 @@ namespace
     NG::Mesh::IndicesData indices = {0, 1, 2, 0, 2, 3};
 
     constexpr std::size_t EntityesCount = 100000;
+    constexpr std::size_t MaxUniformsCount = 100;
 }
 
 struct RenderComponent
@@ -205,17 +206,29 @@ public:
 
     void update() override
     {
-        for (std::size_t index = 0; index < EntityesCount; ++index)
+        for (std::size_t index = 0; index < EntityesCount; index += MaxUniformsCount)
         {
-            const auto &r = storage().component<RenderComponent>(index);
-            const auto &s = storage().component<SizeComponent>(index);
-            const auto &p = storage().component<PositionComponent>(index);
+            std::vector<NM::Vector3f> positions;
+            std::vector<NM::Vector3f> sizes;
+            std::vector<NG::Colorf> colors;
+
+            for (std::size_t i = 0; i < MaxUniformsCount; ++i)
+            {
+                const auto &p = storage().component<PositionComponent>(index + i);
+                const auto &s = storage().component<SizeComponent>(index + i);
+                const auto &r = storage().component<RenderComponent>(index + i);
+
+                positions.push_back(NM::Vector3f{p.pos, 0});
+                sizes.push_back(NM::Vector3f{s.size, 1});
+                colors.push_back(r.color);
+            }
 
             m_renderer.render(m_mesh_id,
                               m_shader_id,
-                              {NG::Uniform{"pos", NM::Vector3f{p.pos, 0}},
-                               NG::Uniform{"size", NM::Vector3f{s.size, 1}},
-                               NG::Uniform{"color", r.color}});
+                              MaxUniformsCount,
+                              {NG::Uniform{"pos", positions},
+                               NG::Uniform{"size", sizes},
+                               NG::Uniform{"color", colors}});
         }
     }
 
