@@ -30,12 +30,13 @@ namespace NP = neutrino::profiler;
 namespace
 {
     const std::filesystem::path fragment_shader = "data/fragment.frag";
-    const std::filesystem::path vertex_shader = "data/vertex.vert";
+    const std::filesystem::path particle_vertex_shader = "data/particle.vert";
+    const std::filesystem::path text_vertex_shader = "data/text.vert";
 
     const NG::Mesh::VertexData vertices = {{-0.5, -0.5, 0.0}, {0.5, -0.5, 0.0}, {0.5, 0.5, 0.0}, {-0.5, 0.5, 0.0}};
     NG::Mesh::IndicesData indices = {0, 1, 2, 0, 2, 3};
 
-    constexpr std::size_t EntityesCount = 10000;
+    constexpr std::size_t EntityesCount = 100000;
 }
 
 struct RenderComponent
@@ -292,7 +293,7 @@ public:
             m_ecs.add_component(m);
         }
 
-        m_ecs.add_system(std::make_unique<RenderSystem>(m_renderer, m_mesh_id, m_shader_id));
+        m_ecs.add_system(std::make_unique<RenderSystem>(m_renderer, m_mesh_id, m_particle_shader_id));
         m_ecs.add_system(std::make_unique<MovementSystem>(N::Size(800, 600)));
 
         if (m_font.load("data/UbuntuMono-Regular.ttf") != NG::Font::LoadResult::Success)
@@ -300,10 +301,18 @@ public:
             throw std::runtime_error("Can't load font.");
         }
 
-        NG::Shader shader;
-        shader.set_vertex_source(vertex_shader);
-        shader.set_fragment_source(fragment_shader);
-        if (!m_renderer.load(m_shader_id, shader))
+        NG::Shader particle_shader;
+        particle_shader.set_vertex_source(particle_vertex_shader);
+        particle_shader.set_fragment_source(fragment_shader);
+        if (!m_renderer.load(m_particle_shader_id, particle_shader))
+        {
+            throw std::runtime_error("Can't load shader.");
+        }
+
+        NG::Shader text_shader;
+        text_shader.set_vertex_source(text_vertex_shader);
+        text_shader.set_fragment_source(fragment_shader);
+        if (!m_renderer.load(m_text_shader_id, text_shader))
         {
             throw std::runtime_error("Can't load shader.");
         }
@@ -379,7 +388,7 @@ public:
 
         // back
         m_renderer.render(m_mesh_id,
-                          m_shader_id,
+                          m_text_shader_id,
                           {NG::Uniform{"pos", NM::Vector3f{size.width - 80, 55, 0.1}},
                            NG::Uniform{"size", NM::Vector3f{100, 20, 1}},
                            NG::Uniform{"color", NG::Color(0x020202FFU)}});
@@ -391,7 +400,7 @@ public:
 
         m_renderer.load(m_text_id, m_font.create_text_mesh(text));
         m_renderer.render(m_text_id,
-                          m_shader_id,
+                          m_text_shader_id,
                           {NG::Uniform{"pos", text_pos},
                            NG::Uniform{"size", normal_text_scale},
                            NG::Uniform{"color", NM::Vector4f(0.9f, 0.5f, 0.6f, 1.0f)}});
@@ -403,7 +412,8 @@ private:
 
     ECSType m_ecs;
 
-    NG::Renderer::ResourceId m_shader_id = 1;
+    NG::Renderer::ResourceId m_particle_shader_id = 1;
+    NG::Renderer::ResourceId m_text_shader_id = 2;
 
     NG::Renderer::ResourceId m_mesh_id = 1;
     NG::Renderer::ResourceId m_text_id = 2;
